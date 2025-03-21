@@ -1,0 +1,7 @@
+<form (ngSubmit)="onSubmit(form)" #form="ngForm">
+    <select name="kategoria" ngModel required>
+      <option *ngFor="let cat of categories" [value]="cat.id">{{ cat.nev }}</option>
+    </select>
+    <input type="date" name="datum" [ngModel]="currentDate" readonly>
+    <button type="submit">Küldés</button>
+  </form>
