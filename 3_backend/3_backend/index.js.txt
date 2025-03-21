@@ -1,0 +1,131 @@
+const express = require('express');
+const { Sequelize, DataTypes } = require('sequelize');
+const app = express();
+app.use(express.json());
+
+const sequelize = new Sequelize('ingatlan', 'user', 'password', {
+  host: 'localhost',
+  dialect: 'postgres',
+  logging: false
+});
+
+const Category = sequelize.define('Category', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: false
+  },
+  nev: {
+    type: DataTypes.STRING,
+    allowNull: false
+  }
+}, {
+  tableName: 'kategoriak',
+  timestamps: false
+});
+
+const Ingatlan = sequelize.define('Ingatlan', {
+  kategoriaId: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  leiras: {
+    type: DataTypes.TEXT,
+    allowNull: false
+  },
+  hirdetesDatuma: {
+    type: DataTypes.DATEONLY,
+    defaultValue: DataTypes.NOW
+  },
+  tehermentes: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false
+  },
+  ar: {
+    type: DataTypes.INTEGER,
+    allowNull: false
+  },
+  kepUrl: {
+    type: DataTypes.STRING,
+    allowNull: false
+  }
+}, {
+  tableName: 'ingatlanok',
+  timestamps: false
+});
+
+Ingatlan.belongsTo(Category, { foreignKey: 'kategoriaId' });
+Category.hasMany(Ingatlan, { foreignKey: 'kategoriaId' });
+
+sequelize.sync({ force: true }).then(async () => {
+  await Category.bulkCreate([
+    { id: 1, nev: 'Ház' }, { id: 2, nev: 'Lakás' }, { id: 3, nev: 'Építési telek' },
+    { id: 4, nev: 'Garázs' }, { id: 5, nev: 'Mezőgazdasági terület' }, { id: 6, nev: 'Ipari ingatlan' }
+  ]);
+  console.log('Database & tables created!');
+});
+
+app.get('/api/ingatlan', async (req, res) => {
+  try {
+    const ingatlanok = await Ingatlan.findAll({
+      include: [{
+        model: Category,
+        attributes: ['nev']
+      }]
+    });
+    const formatted = ingatlanok.map(ingatlan => ({
+      id: ingatlan.id,
+      kategoria: ingatlan.Category.nev,
+      leiras: ingatlan.leiras,
+      hirdetesDatuma: ingatlan.hirdetesDatuma,
+      tehermentes: ingatlan.tehermentes,
+      ar: ingatlan.ar,
+      kepUrl: ingatlan.kepUrl
+    }));
+    res.json(formatted);
+  } catch (error) {
+    res.status(500).send('Server error');
+  }
+});
+
+app.post('/api/ingatlan', async (req, res) => {
+  const { kategoria, leiras, hirdetesDatuma, tehermentes, ar, kepUrl } = req.body;
+  if (kategoria === undefined || !leiras || tehermentes === undefined || ar === undefined || !kepUrl) {
+    return res.status(400).send('Hiányos adatok');
+  }
+  try {
+    const newIngatlan = await Ingatlan.create({
+      kategoriaId: kategoria,
+      leiras,
+      hirdetesDatuma,
+      tehermentes,
+      ar,
+      kepUrl
+    });
+    res.status(201).json({ id: newIngatlan.id });
+  } catch (error) {
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      res.status(400).send('Invalid category id');
+    } else {
+      res.status(500).send('Server error');
+    }
+  }
+});
+
+app.delete('/api/ingatlan/:id', async (req, res) => {
+  try {
+    const ingatlan = await Ingatlan.findByPk(req.params.id);
+    if (!ingatlan) {
+      return res.status(404).send('Ingatlan nem létezik');
+    }
+    await ingatlan.destroy();
+    res.status(204).end();
+  } catch (error) {
+    res.status(500).send('Server error');
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
